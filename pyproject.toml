@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "autorepy"
+authors = [
+  { name="Noah Kupinsky", email="kupinskynoah@gmail.com" },
+]
+description = "An opinionated data storage library"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/noahkupinsky/autorepy"
+Issues = "https://github.com/noahkupinsky/autorepy/issues"
+
+[tool.hatch.version]
+path = "src/autorepy/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autorepy"]
+
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest",
+]
+
+[tool.hatch.envs.test.scripts]
+run = "pytest"
