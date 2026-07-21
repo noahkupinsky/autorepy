@@ -16,6 +16,7 @@ class RepoDataError(ValueError):
 ID_FIELD = "id"
 _REF_METADATA_KEY = object()
 _DEEP_REF_METADATA_KEY = object()
+_OMIT_METEDATA_KEY = object()
 
 
 def ref(**kwargs):
@@ -32,6 +33,15 @@ def deep_ref(**kwargs):
     metadata = {
         **metadata,
         _DEEP_REF_METADATA_KEY: True,
+    }
+    return field(metadata=metadata, **kwargs)
+
+
+def omit(**kwargs):
+    metadata = kwargs.pop("metadata", {})
+    metadata = {
+        **metadata,
+        _OMIT_METEDATA_KEY: True,
     }
     return field(metadata=metadata, **kwargs)
 
@@ -62,7 +72,7 @@ class RepoObject:
         }
         
         for field in fields(self):
-            if field.name == ID_FIELD:
+            if self._is_omit_or_id(field):
                 continue
             
             value = getattr(self, field.name)
@@ -137,7 +147,7 @@ class RepoObject:
         init_field_names = {
             field.name
             for field in fields(cls)
-            if field.init and field.name != ID_FIELD
+            if field.init and not cls._is_omit_or_id(field)
         }
 
         arguments = {
@@ -152,3 +162,7 @@ class RepoObject:
             return cls(**arguments)
         except TypeError as error:
             raise RepoDataError(f"Could not construct {cls.__qualname__} from repo data") from error
+        
+    @staticmethod
+    def _is_omit_or_id(field) -> bool:
+        return field.name == ID_FIELD or field.metadata.get(_OMIT_METEDATA_KEY)

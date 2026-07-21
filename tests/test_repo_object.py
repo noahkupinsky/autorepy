@@ -1,10 +1,14 @@
-from autorepy.repo_object import RepoObject, ref
+from autorepy.repo_object import RepoObject, ref, omit
 from autorepy.tags import TYPE_TAG, ID_TAG
 from dataclasses import dataclass
 
 @dataclass
 class Dog(RepoObject):
     breed: str
+    
+@dataclass
+class Omitter(RepoObject):
+    foo: str = omit()
 
 
 def test_dog_to_repo_data():
@@ -79,4 +83,12 @@ def test_ref_field():
     data = owner.to_dict()
     
     assert data["cat"] == cat.to_ref()
+    
+    
+def test_omit_field():
+    om = Omitter(id="Alice", foo="omit me!")
+    
+    data = om.to_dict()
+    
+    assert "foo" not in data
 
