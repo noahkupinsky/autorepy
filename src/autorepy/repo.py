@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import fields, is_dataclass
-from typing import Any
+from typing import Any, Iterable
 
 from autorepy.registry import Registry
 from autorepy.repo_object import RepoObject
@@ -26,7 +26,7 @@ class Repo(ABC):
         object_id = data[ID_TAG]
 
         self._put_in_repo(type_name, object_id, data)
-        self.cache[(type_name, object_id)] = obj
+        self.cache[(type_name, object_id)] = obj    
 
     def load(self, type: str, id: str) -> RepoObject:
         """
@@ -43,6 +43,9 @@ class Repo(ABC):
             return cached
 
         cls = self.registry.get_class(type)
+        if not self._has_in_repo(type, id):
+            type = self._find_under_alias(type, id)
+
         raw_data = self._get_from_repo(type, id)
 
         if not issubclass(cls, RepoObject):
@@ -56,10 +59,10 @@ class Repo(ABC):
         self.cache[key] = placeholder
 
         try:
-            resolved_data = self.resolve_refs(raw_data)
+            resolved_data = self._resolve_refs(raw_data)
 
             # Let the class perform its normal deserialization logic.
-            initialized = self.deep_from_repo_data(resolved_data)
+            initialized = self._deep_from_repo_data(resolved_data)
 
             # Transfer the initialized object's state onto the cached object.
             self._copy_object_state(
@@ -95,7 +98,7 @@ class Repo(ABC):
                 getattr(source, dataclass_field.name),
             )
 
-    def resolve_refs(
+    def _resolve_refs(
         self,
         data: Any,
         accumulator: dict[int, Any] | None = None,
@@ -156,7 +159,7 @@ class Repo(ABC):
             accumulator[identity] = resolved_dict
 
             for key, value in data.items():
-                resolved_dict[key] = self.resolve_refs(
+                resolved_dict[key] = self._resolve_refs(
                     value,
                     accumulator,
                 )
@@ -173,7 +176,7 @@ class Repo(ABC):
             accumulator[identity] = resolved_list
 
             resolved_list.extend(
-                self.resolve_refs(item, accumulator)
+                self._resolve_refs(item, accumulator)
                 for item in data
             )
 
@@ -181,10 +184,10 @@ class Repo(ABC):
 
         return data
     
-    def deep_from_repo_data(self, data: Any) -> Any:
+    def _deep_from_repo_data(self, data: Any) -> Any:
         if isinstance(data, dict):
             # before trying to turn this into a repo object, make sure all its fields are appropriately initialized
-            data = {k: self.deep_from_repo_data(v) for k, v in data.items()}
+            data = {k: self._deep_from_repo_data(v) for k, v in data.items()}
             
             if TYPE_TAG in data and ID_TAG in data:
                 cls = self.registry.get_class(data[TYPE_TAG])
@@ -192,9 +195,42 @@ class Repo(ABC):
             else:
                 return data
         elif isinstance(data, list):
-            return [self.deep_from_repo_data(item) for item in data]
+            return [self._deep_from_repo_data(item) for item in data]
         else:
             return data
+
+    def _find_under_alias(self, type: str, id: str) -> str | None:
+        """
+        Looks for an alias of the given type such that (alias, id) is in the repo
+        Returns the alias or None if not found
+        """
+        for alias in self.registry.get_type_names(type):
+            if self._has_in_repo(alias, id):
+                return alias
+            
+        raise KeyError(f"Object {type!r} with id {id!r} not found under any aliases")
+
+    def load_all(self, type: str) -> list[RepoObject]:
+        """
+        Loads all objects whose type is the given type or an alias of it
+        """
+        return [
+            self.load(type=type, id=id)
+            for alias in self.registry.get_type_names(type)
+            for id in self._get_all_ids_for_type_name(alias)
+        ]
+
+    @abstractmethod
+    def _get_all_ids_for_type_name(self, type_name: str) -> list[str]:
+        """
+        Return a list of ids for the given type name. 
+        Does not look for ids of any aliases
+        """
+        ...
+        
+    @abstractmethod
+    def _has_in_repo(self, type: str, id: str) -> bool:
+        ...
 
     @abstractmethod
     def _put_in_repo(

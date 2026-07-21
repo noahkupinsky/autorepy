@@ -29,6 +29,16 @@ class FileSystemRepo(Repo):
         # be addressed by an alias, and Repo.load() uses that stored type name.
         for type_name in registry.type_name_to_class_map:
             self._type_dir(type_name).mkdir(exist_ok=True)
+            
+    def _get_all_ids_for_type_name(self, type):
+        return [
+            object_id
+            for object_id in os.listdir(self._type_dir(type))
+            if object_id.endswith(".json")
+        ]
+        
+    def _has_in_repo(self, type: str, id: str) -> bool:
+        return self._object_path(type, id).exists()
 
     def _put_in_repo(
         self,

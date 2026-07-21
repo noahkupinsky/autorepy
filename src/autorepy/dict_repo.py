@@ -10,6 +10,12 @@ class DictRepo(Repo):
         super().__init__(registry)
         self.data = {}
         
+    def _get_all_ids_for_type_name(self, type: str) -> list[str]:
+        return [id for (t, id) in self.data if t == type]
+    
+    def _has_in_repo(self, type: str, id: str) -> bool:
+        return (type, id) in self.data
+        
     def _put_in_repo(self, type: str, id: str, data: dict) -> None:
         self.data[(type, id)] = data
         

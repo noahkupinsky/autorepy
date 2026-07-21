@@ -148,7 +148,7 @@ def test_delete_removes_json_and_cache_entry(repo: FileSystemRepo) -> None:
 
 
 def test_missing_object_raises_file_not_found(repo: FileSystemRepo) -> None:
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(KeyError):
         repo.load("Dog", "missing")
 
 

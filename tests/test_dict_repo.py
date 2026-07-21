@@ -189,7 +189,7 @@ class TestReferenceResolution:
 
     def test_nested_dict_and_list_references(self, repo: DictRepo) -> None:
         put(repo, raw("Dog", "fido", breed="corgi"))
-        resolved = repo.resolve_refs({"outer": [{"dog": reference("Dog", "fido")}, reference("Dog", "fido")]})
+        resolved = repo._resolve_refs({"outer": [{"dog": reference("Dog", "fido")}, reference("Dog", "fido")]})
         dog = resolved["outer"][0]["dog"]
         assert isinstance(dog, Dog)
         assert resolved["outer"][1] is dog
@@ -216,24 +216,24 @@ class TestReferenceResolution:
 
     @pytest.mark.parametrize("shared", [{"value": 1}, [1, 2]])
     def test_shared_container_identity(self, repo: DictRepo, shared: Any) -> None:
-        resolved = repo.resolve_refs({"first": shared, "second": shared})
+        resolved = repo._resolve_refs({"first": shared, "second": shared})
         assert resolved["first"] is resolved["second"]
 
     def test_cyclic_raw_dict(self, repo: DictRepo) -> None:
         data: dict[str, Any] = {}
         data["self"] = data
-        resolved = repo.resolve_refs(data)
+        resolved = repo._resolve_refs(data)
         assert resolved["self"] is resolved
 
     def test_cyclic_raw_list(self, repo: DictRepo) -> None:
         data: list[Any] = []
         data.append(data)
-        resolved = repo.resolve_refs(data)
+        resolved = repo._resolve_refs(data)
         assert resolved[0] is resolved
 
     def test_ref_key_with_sibling_is_not_reference(self, repo: DictRepo) -> None:
         data = {REF_TAG: {TYPE_TAG: "Dog", ID_TAG: "fido"}, "extra": True}
-        assert repo.resolve_refs(data) == data
+        assert repo._resolve_refs(data) == data
 
     @pytest.mark.parametrize("bad_ref", [
         {REF_TAG: None}, {REF_TAG: []}, {REF_TAG: {}},
@@ -243,7 +243,7 @@ class TestReferenceResolution:
     ])
     def test_malformed_reference_raises_value_error(self, repo: DictRepo, bad_ref: Any) -> None:
         with pytest.raises(ValueError):
-            repo.resolve_refs(bad_ref)
+            repo._resolve_refs(bad_ref)
 
     def test_failed_nested_load_cleans_outer_placeholder(self, repo: DictRepo) -> None:
         put(repo, raw("Person", "alice", name="Alice", dog=reference("Dog", "missing")))
@@ -251,3 +251,17 @@ class TestReferenceResolution:
             repo.load("Person", "alice")
         assert ("Person", "alice") not in repo.cache
         assert ("Dog", "missing") not in repo.cache
+        
+        
+def test_load_all_with_aliases(repo: DictRepo) -> None:
+    johns_dog = Dog(id="fido", breed="corgi")
+    repo.save(johns_dog)
+    john = Person(id="john", name="John", dog=johns_dog)
+    repo.save(john)
+    put(repo, raw("LegacyPerson", "alice", name="Alice", dog=reference("Dog", "fido")))
+    repo.cache = {}
+    loaded = repo.load_all("Person")
+    assert isinstance(loaded, list)
+    assert len(loaded) == 2
+    assert loaded[0] == Person(id="john", name="John", dog=johns_dog)
+    assert loaded[1] == Person(id="alice", name="Alice", dog=johns_dog)
