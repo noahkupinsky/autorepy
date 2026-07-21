@@ -36,12 +36,7 @@ class Repo(ABC):
         are resolved. This allows cyclic references to point to the same
         eventual RepoObject instance.
         """
-        if not isinstance(type, str):
-            if not issubclass(type, RepoObject):
-                raise TypeError(
-                    f"Expected type name or RepoObject subclass, got {type!r}"
-                )
-            type = type.type_name()
+        type = self._as_type_name(type)
             
         key = (type, id)
 
@@ -217,15 +212,25 @@ class Repo(ABC):
             
         raise KeyError(f"Object {type!r} with id {id!r} not found under any aliases")
 
-    def load_all(self, type: str) -> list[RepoObject]:
+    def load_all(self, type: str | type[RepoObject]) -> list[RepoObject]:
         """
         Loads all objects whose type is the given type or an alias of it
         """
+        type = self._as_type_name(type)
+        
         return [
             self.load(type=type, id=id)
             for alias in self.registry.get_type_names(type)
             for id in self._get_all_ids_for_type_name(alias)
         ]
+        
+    @staticmethod
+    def _as_type_name(type: str | type[RepoObject]) -> str:
+        if isinstance(type, str):
+            return type
+        if issubclass(type, RepoObject):
+            return type.type_name()
+        raise TypeError(f"Expected type or type name, got {type(type).__name__}")
 
     @abstractmethod
     def _get_all_ids_for_type_name(self, type_name: str) -> list[str]:
