@@ -1,93 +1,105 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
-from typing import Any, ClassVar, Mapping, Self
+from dataclasses import dataclass, fields, field
+from typing import Any, ClassVar, Mapping, Self, TypeAlias
+from autorepy.tags import REF_TAG, TYPE_TAG, ID_TAG
 
 
-RepoData = dict[str, Any]
+RepoData: TypeAlias = dict[str, Any]
+RepoRef: TypeAlias = dict[str, dict[str, str]]
+
+
+class RepoDataError(ValueError):
+    """Raised when repository data cannot be deserialized."""
+    
+    
+ID_FIELD = "id"
+_REF_METADATA_KEY = object()
+
+
+def ref(**kwargs):
+    metadata = kwargs.pop("metadata", {})
+    metadata = {
+        **metadata,
+        _REF_METADATA_KEY: True,
+    }
+    return field(metadata=metadata, **kwargs)
 
 
 @dataclass
 class RepoObject:
     id: str
 
-    # Every concrete subclass must override this.
-    REPO_OBJECT_TYPE: ClassVar[str]
-
-    # Maps stored "type" values to Python classes.
-    _type_registry: ClassVar[dict[str, type[RepoObject]]] = {}
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-
-        repo_type = getattr(cls, "REPO_OBJECT_TYPE", None)
-
-        if not isinstance(repo_type, str) or not repo_type:
-            raise TypeError(
-                f"{cls.__name__} must define a nonempty string "
-                f"REPO_OBJECT_TYPE"
-            )
-
-        existing = RepoObject._type_registry.get(repo_type)
-        if existing is not None and existing is not cls:
-            raise TypeError(
-                f"Repo object type {repo_type!r} is already registered "
-                f"to {existing.__name__}"
-            )
-
-        RepoObject._type_registry[repo_type] = cls
+    @classmethod
+    def repo_type(cls) -> str:
+        return cls.__name__
+    
+    def to_ref(self) -> RepoRef:
+        return {
+            REF_TAG: {
+                TYPE_TAG: self.repo_type(),
+                ID_TAG: self.id,
+            }
+        }
 
     def to_repo_data(self) -> RepoData:
         """
-        Convert this object into data suitable for crossing the repository
-        boundary.
-
-        Subclasses may override this when they need custom serialization.
+        Convert this object to raw repository data. Subclasses may override this
         """
-        data = {
-            field.name: getattr(self, field.name)
-            for field in fields(self)
+        data: RepoData = {
+            TYPE_TAG: self.repo_type(),
+            ID_TAG: self.id
         }
+        
+        for field in fields(self):
+            if field.name == ID_FIELD:
+                continue
+            
+            value = getattr(self, field.name)
+            
+            if field.metadata.get(_REF_METADATA_KEY):
+                value = self._obj_to_ref(field_name=field.name, value=value)
 
-        return {
-            "type": self.REPO_OBJECT_TYPE,
-            **data,
-        }
+            data[field.name] = value
 
-    @classmethod
-    def from_repo_data(cls, data: Mapping[str, Any]) -> Self:
-        """
-        Construct an object from repository data.
+        return data
+    
+    @staticmethod
+    def _obj_to_ref(*, field_name: str, value: Any) -> RepoRef | None:
+        if value is None:
+            return None
 
-        When called on RepoObject itself, dispatch according to data["type"].
-        When called on a subclass, construct that particular subclass.
-        """
-        repo_type = data.get("type")
-
-        if not isinstance(repo_type, str):
-            raise ValueError("Repo data must contain a string 'type' field")
-
-        if cls is RepoObject:
-            try:
-                concrete_class = cls._type_registry[repo_type]
-            except KeyError:
-                raise ValueError(
-                    f"Unknown repo object type: {repo_type!r}"
-                ) from None
-
-            return concrete_class.from_repo_data(data)
-
-        if repo_type != cls.REPO_OBJECT_TYPE:
-            raise ValueError(
-                f"Cannot deserialize type {repo_type!r} as "
-                f"{cls.__name__}; expected {cls.REPO_OBJECT_TYPE!r}"
+        if not isinstance(value, RepoObject):
+            raise TypeError(
+                f"Reference field {field_name!r} must contain a "
+                f"RepoObject or None, not {type(value).__name__}"
             )
 
-        field_names = {field.name for field in fields(cls)}
-        constructor_data = {
-            key: value
-            for key, value in data.items()
-            if key in field_names
+        return value.to_ref()
+
+    @classmethod
+    def from_repo_data(
+        cls,
+        data: Mapping[str, Any],
+    ) -> Self:
+        """
+        Construct an instance of cls from raw repository data.
+        """
+        init_field_names = {
+            field.name
+            for field in fields(cls)
+            if field.init and field.name != ID_FIELD
         }
 
-        return cls(**constructor_data)
+        arguments = {
+            name: data[name]
+            for name in init_field_names
+            if name in data
+        }
+        
+        arguments[ID_FIELD] = data[ID_TAG]
+
+        try:
+            return cls(**arguments)
+        except TypeError as error:
+            raise RepoDataError(f"Could not construct {cls.__qualname__} from repo data") from error
