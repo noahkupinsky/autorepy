@@ -356,3 +356,10 @@ def test_failed_nested_load_cleans_all_placeholders(
         repo.load("Person", "alice")
     assert ("Person", "alice") not in repo.cache
     assert ("Dog", "missing") not in repo.cache
+    
+    
+def test_list_all(repo: Repo, put_raw_repo_data: PutRawRepoData) -> None:
+    put_raw_repo_data(raw("Person", "alice", name="Alice", dog=None))
+    put_raw_repo_data(raw("LegacyPerson", "bob", name="Bob", dog=None))
+    person_list = repo.list_all_ids("Person")
+    assert set(person_list) == {"alice", "bob"}

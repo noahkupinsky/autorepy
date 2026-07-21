@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import fields, is_dataclass
-from typing import Any, Iterable
+from typing import Any, Iterator
 
 from autorepy.registry import Registry
 from autorepy.repo_object import RepoObject
@@ -211,6 +211,14 @@ class Repo(ABC):
                 return alias
             
         raise KeyError(f"Object {type!r} with id {id!r} not found under any aliases")
+    
+    def list_all_ids(self, type: str | type[RepoObject]) -> list[str]:
+        """
+        Lists all object ids whose type is the given type or an alias of it
+        """
+        type = self._as_type_name(type)
+        
+        return [id for _, id in self._iterate_all(type)]
 
     def load_all(self, type: str | type[RepoObject]) -> list[RepoObject]:
         """
@@ -218,11 +226,14 @@ class Repo(ABC):
         """
         type = self._as_type_name(type)
         
-        return [
-            self.load(type=type, id=id)
-            for alias in self.registry.get_type_names(type)
-            for id in self._get_all_ids_for_type_name(alias)
-        ]
+        return [self.load(type=alias, id=id) for alias, id in self._iterate_all(type)]
+        
+    def _iterate_all(self, type: str | type[RepoObject]) -> Iterator[RepoObject]:
+        type = self._as_type_name(type)
+        
+        for alias in self.registry.get_type_names(type):
+            for id in self._get_all_ids_for_type_name(alias):
+                yield (alias, id)
         
     @staticmethod
     def _as_type_name(type: str | type[RepoObject]) -> str:
