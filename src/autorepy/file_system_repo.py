@@ -32,7 +32,7 @@ class FileSystemRepo(Repo):
             
     def _get_all_ids_for_type_name(self, type):
         return [
-            object_id
+            object_id[:-5]
             for object_id in os.listdir(self._type_dir(type))
             if object_id.endswith(".json")
         ]

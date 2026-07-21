@@ -9,7 +9,9 @@ import pytest
 from autorepy.file_system_repo import FileSystemRepo
 from autorepy.registry import Registry
 from autorepy.repo_object import RepoObject, ref
-from autorepy.tags import ID_TAG, TYPE_TAG
+from autorepy.repo import Repo
+from autorepy.tags import REF_TAG, ID_TAG, TYPE_TAG
+from typing import Any
 
 
 @dataclass
@@ -31,6 +33,17 @@ def registry() -> Registry:
 @pytest.fixture
 def repo(tmp_path: Path, registry: Registry) -> FileSystemRepo:
     return FileSystemRepo(tmp_path / "objects", registry)
+
+def raw(type_name: str, object_id: str, **values: Any) -> dict[str, Any]:
+    return {TYPE_TAG: type_name, ID_TAG: object_id, **values}
+
+
+def reference(type_name: str, object_id: str) -> dict[str, Any]:
+    return {REF_TAG: {TYPE_TAG: type_name, ID_TAG: object_id}}
+
+
+def put(repo: Repo, data: dict[str, Any]) -> None:
+    repo._put_in_repo(data[TYPE_TAG], data[ID_TAG], data)
 
 
 def test_init_creates_root_and_directory_for_every_registered_name(
@@ -174,3 +187,16 @@ def test_non_object_json_is_rejected(repo: FileSystemRepo) -> None:
 
     with pytest.raises(ValueError, match="must contain a JSON object"):
         repo.load("Dog", "fido")
+
+def test_load_all_with_aliases(repo: Repo) -> None:
+    johns_dog = Dog(id="fido", breed="corgi")
+    repo.save(johns_dog)
+    john = Person(id="john", name="John", dog=johns_dog)
+    repo.save(john)
+    put(repo, raw("LegacyPerson", "alice", name="Alice", dog=reference("Dog", "fido")))
+    repo.cache = {}
+    loaded = repo.load_all("Person")
+    assert isinstance(loaded, list)
+    assert len(loaded) == 2
+    assert loaded[0] == Person(id="john", name="John", dog=johns_dog)
+    assert loaded[1] == Person(id="alice", name="Alice", dog=johns_dog)
