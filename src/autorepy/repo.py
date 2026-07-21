@@ -28,7 +28,7 @@ class Repo(ABC):
         self._put_in_repo(type_name, object_id, data)
         self.cache[(type_name, object_id)] = obj    
 
-    def load(self, type: str, id: str) -> RepoObject:
+    def load(self, type: str | type[RepoObject], id: str) -> RepoObject:
         """
         Load a repository object and recursively resolve its references.
 
@@ -36,6 +36,13 @@ class Repo(ABC):
         are resolved. This allows cyclic references to point to the same
         eventual RepoObject instance.
         """
+        if not isinstance(type, str):
+            if not issubclass(type, RepoObject):
+                raise TypeError(
+                    f"Expected type name or RepoObject subclass, got {type!r}"
+                )
+            type = type.type_name()
+            
         key = (type, id)
 
         cached = self.cache.get(key)

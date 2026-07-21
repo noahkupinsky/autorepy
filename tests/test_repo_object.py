@@ -40,7 +40,7 @@ class CustomDataConversion(RepoObject):
     
     def to_dict(self):
         return {
-            TYPE_TAG: self.repo_type(),
+            TYPE_TAG: self.type_name(),
             ID_TAG: self.id,
             "foo": self.foo + 1
         }

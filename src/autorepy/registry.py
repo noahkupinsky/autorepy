@@ -12,7 +12,7 @@ class Registry:
     
     def register(self, cls: type[RepoObject], *aliases: str):
         # make sure this class name and its aliases are unique
-        type_names = [cls.repo_type(), *aliases]
+        type_names = [cls.type_name(), *aliases]
         for name in type_names:
             if name in self.type_name_to_class_map:
                 raise ValueError(f"Class name {name} is already registered")

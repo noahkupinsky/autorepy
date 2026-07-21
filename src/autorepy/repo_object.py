@@ -55,13 +55,13 @@ class RepoObject:
     MIGRATIONS: ClassVar[dict[int, Migration]] = {}
 
     @classmethod
-    def repo_type(cls) -> str:
+    def type_name(cls) -> str:
         return cls.__name__
     
     def to_ref(self) -> RepoRef:
         return {
             REF_TAG: {
-                TYPE_TAG: self.repo_type(),
+                TYPE_TAG: self.type_name(),
                 ID_TAG: self.id,
             }
         }
@@ -76,7 +76,7 @@ class RepoObject:
         )
 
         data: RepoData = {
-            TYPE_TAG: self.repo_type(),
+            TYPE_TAG: self.type_name(),
             ID_TAG: self.id,
             FORMAT_VERSION_TAG: self.CURRENT_FORMAT_VERSION,
         }
