@@ -21,7 +21,7 @@ class Repo(ABC):
         """
         Save a repository object to the repository and add it to the cache.
         """
-        data = obj.to_repo_data()
+        data = obj.to_dict()
         type_name = data[TYPE_TAG]
         object_id = data[ID_TAG]
 
@@ -59,7 +59,7 @@ class Repo(ABC):
             resolved_data = self.resolve_refs(raw_data)
 
             # Let the class perform its normal deserialization logic.
-            initialized = cls.from_repo_data(resolved_data)
+            initialized = self.deep_from_repo_data(resolved_data)
 
             # Transfer the initialized object's state onto the cached object.
             self._copy_object_state(
@@ -180,6 +180,21 @@ class Repo(ABC):
             return resolved_list
 
         return data
+    
+    def deep_from_repo_data(self, data: Any) -> Any:
+        if isinstance(data, dict):
+            # before trying to turn this into a repo object, make sure all its fields are appropriately initialized
+            data = {k: self.deep_from_repo_data(v) for k, v in data.items()}
+            
+            if TYPE_TAG in data and ID_TAG in data:
+                cls = self.registry.get_class(data[TYPE_TAG])
+                return cls.from_fields(data)
+            else:
+                return data
+        elif isinstance(data, list):
+            return [self.deep_from_repo_data(item) for item in data]
+        else:
+            return data
 
     @abstractmethod
     def _put_in_repo(

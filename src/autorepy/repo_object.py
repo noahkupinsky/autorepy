@@ -15,6 +15,7 @@ class RepoDataError(ValueError):
     
 ID_FIELD = "id"
 _REF_METADATA_KEY = object()
+_DEEP_REF_METADATA_KEY = object()
 
 
 def ref(**kwargs):
@@ -22,6 +23,15 @@ def ref(**kwargs):
     metadata = {
         **metadata,
         _REF_METADATA_KEY: True,
+    }
+    return field(metadata=metadata, **kwargs)
+
+
+def deep_ref(**kwargs):
+    metadata = kwargs.pop("metadata", {})
+    metadata = {
+        **metadata,
+        _DEEP_REF_METADATA_KEY: True,
     }
     return field(metadata=metadata, **kwargs)
 
@@ -42,7 +52,7 @@ class RepoObject:
             }
         }
 
-    def to_repo_data(self) -> RepoData:
+    def to_dict(self) -> RepoData:
         """
         Convert this object to raw repository data. Subclasses may override this
         """
@@ -57,28 +67,67 @@ class RepoObject:
             
             value = getattr(self, field.name)
             
-            if field.metadata.get(_REF_METADATA_KEY):
-                value = self._obj_to_ref(field_name=field.name, value=value)
+            if field.metadata.get(_DEEP_REF_METADATA_KEY):
+                value = self._deep_obj_to_ref(value)
+            elif field.metadata.get(_REF_METADATA_KEY):
+                value = self._obj_to_ref(value)
+            else:
+                value = self._deep_serialize(value)
 
             data[field.name] = value
 
         return data
     
     @staticmethod
-    def _obj_to_ref(*, field_name: str, value: Any) -> RepoRef | None:
+    def _obj_to_ref(value: Any) -> RepoRef | None:
         if value is None:
             return None
 
         if not isinstance(value, RepoObject):
-            raise TypeError(
-                f"Reference field {field_name!r} must contain a "
-                f"RepoObject or None, not {type(value).__name__}"
-            )
+            raise TypeError(f"Called _obj_to_ref on value of type {type(value).__name__}")
 
         return value.to_ref()
+    
+    
+    @staticmethod
+    def _deep_obj_to_ref(value: Any) -> Any:
+        if isinstance(value, list):
+            return [RepoObject._deep_obj_to_ref(v) for v in value]
+        elif isinstance(value, dict):
+            return {k: RepoObject._deep_obj_to_ref(v) for k, v in value.items()}
+        elif isinstance(value, RepoObject):
+            return value.to_ref()
+        else:
+            return value
+        
+    @staticmethod
+    def _deep_serialize(value: Any) -> Any:
+        if isinstance(value, RepoObject):
+            return value.to_dict()
+        elif isinstance(value, list):
+            return [RepoObject._deep_serialize(v) for v in value]
+        elif isinstance(value, dict):
+            return {
+                RepoObject._ensure_string(k): RepoObject._deep_serialize(v) 
+                for k, v in value.items()
+            }
+        else:
+            return RepoObject._ensure_primitive(value)
+        
+    @staticmethod
+    def _ensure_string(value: Any) -> str:
+        if not isinstance(value, str):
+            raise TypeError(f"Expected string, got {type(value).__name__}")
+        return value
+        
+    @staticmethod
+    def _ensure_primitive(value: Any) -> Any:
+        if not isinstance(value, (int, float, str, bool)):
+            raise TypeError(f"Expected primitive type, got {type(value).__name__}")
+        return value
 
     @classmethod
-    def from_repo_data(
+    def from_fields(
         cls,
         data: Mapping[str, Any],
     ) -> Self:

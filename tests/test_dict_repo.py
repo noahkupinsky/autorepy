@@ -45,7 +45,7 @@ class CustomObject(RepoObject):
     calls: ClassVar[int] = 0
 
     @classmethod
-    def from_repo_data(cls, data: dict[str, Any]) -> CustomObject:
+    def from_fields(cls, data: dict[str, Any]) -> CustomObject:
         cls.calls += 1
         return cls(id=data[ID_TAG], value=data["value"] * 2)
 
