@@ -11,7 +11,7 @@ from autorepy.tags import FORMAT_VERSION_TAG, ID_TAG, TYPE_TAG
 from repo_contract_models import Dog
 
 
-def test_init_creates_root_and_all_registered_type_directories(
+def test_init_creates_only_the_repository_root(
     tmp_path: Path,
     registry: Registry,
 ) -> None:
@@ -22,7 +22,8 @@ def test_init_creates_root_and_all_registered_type_directories(
     assert repo.root_dir == root
     assert root.is_dir()
     for type_name in registry.type_name_to_class_map:
-        assert (root / type_name).is_dir()
+        assert not (root / type_name).exists()
+    assert repo.list_all_ids(Dog) == []
 
 
 def test_save_writes_json_at_type_and_id_path(
@@ -33,6 +34,7 @@ def test_save_writes_json_at_type_and_id_path(
 
     repo.save(Dog(id="fido", breed="corgi"))
 
+    assert (tmp_path / "Dog").is_dir()
     assert json.loads((tmp_path / "Dog" / "fido.json").read_text()) == {
         TYPE_TAG: "Dog",
         ID_TAG: "fido",
@@ -61,6 +63,7 @@ def test_storage_lists_only_json_ids(
     registry: Registry,
 ) -> None:
     repo = FileSystemRepo(tmp_path, registry)
+    (tmp_path / "Dog").mkdir()
     (tmp_path / "Dog" / "fido.json").write_text("{}")
     (tmp_path / "Dog" / "ignore.txt").write_text("ignored")
 
@@ -79,11 +82,14 @@ def test_rejects_ids_that_are_not_single_path_components(
         repo.save(Dog(id=bad_id, breed="corgi"))
 
 
-def test_rejects_unsafe_registered_type_name(tmp_path: Path) -> None:
+def test_rejects_unsafe_type_name_when_storage_is_accessed(
+    tmp_path: Path,
+) -> None:
     registry = Registry((Dog, "../outside"))
+    repo = FileSystemRepo(tmp_path, registry)
 
     with pytest.raises(ValueError):
-        FileSystemRepo(tmp_path, registry)
+        repo.list_all_ids("../outside")
 
 
 def test_non_object_json_is_rejected(
@@ -91,6 +97,7 @@ def test_non_object_json_is_rejected(
     registry: Registry,
 ) -> None:
     repo = FileSystemRepo(tmp_path, registry)
+    (tmp_path / "Dog").mkdir()
     (tmp_path / "Dog" / "fido.json").write_text("[]")
 
     with pytest.raises(ValueError, match="must contain a JSON object"):

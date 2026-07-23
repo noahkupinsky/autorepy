@@ -25,15 +25,14 @@ class FileSystemRepo(Repo):
         self.root_dir = Path(root_dir)
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
-        # Include aliases as well as canonical class names. Old data may still
-        # be addressed by an alias, and Repo.load() uses that stored type name.
-        for type_name in registry.type_name_to_class_map:
-            self._type_dir(type_name).mkdir(exist_ok=True)
-            
     def _get_all_ids_for_type_name(self, type):
+        type_dir = self._type_dir(type)
+        if not type_dir.is_dir():
+            return []
+
         return [
             object_id[:-5]
-            for object_id in os.listdir(self._type_dir(type))
+            for object_id in os.listdir(type_dir)
             if object_id.endswith(".json")
         ]
         
