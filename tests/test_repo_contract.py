@@ -20,6 +20,7 @@ from repo_contract_models import (
     SelfReferential,
     SlottedObject,
     Tree,
+    ObjectWithTypeRef
 )
 
 
@@ -363,3 +364,9 @@ def test_list_all(repo: Repo, put_raw_repo_data: PutRawRepoData) -> None:
     put_raw_repo_data(raw("LegacyPerson", "bob", name="Bob", dog=None))
     person_list = repo.list_all_ids("Person")
     assert set(person_list) == {"alice", "bob"}
+    
+    
+def test_type_ref(repo: Repo, put_raw_repo_data: PutRawRepoData) -> None:
+    put_raw_repo_data(raw("ObjectWithTypeRef", "obj", type_ref=ObjectWithTypeRef.to_type_ref()))
+    obj = repo.load("ObjectWithTypeRef", "obj")
+    assert obj.type_ref == ObjectWithTypeRef

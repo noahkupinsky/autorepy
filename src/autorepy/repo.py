@@ -6,7 +6,7 @@ from typing import Any, Iterator
 
 from autorepy.registry import Registry
 from autorepy.repo_object import RepoObject
-from autorepy.tags import REF_TAG, TYPE_TAG, ID_TAG
+from autorepy.tags import REF_TAG, TYPE_TAG, ID_TAG, TYPE_REF_TAG
 
 
 class Repo(ABC):
@@ -188,6 +188,10 @@ class Repo(ABC):
     
     def _deep_from_repo_data(self, data: Any) -> Any:
         if isinstance(data, dict):
+            # first, see if this is a type ref
+            if set(data) == {TYPE_REF_TAG}:
+                return self._resolve_type_ref(data[TYPE_REF_TAG])
+                
             # before trying to turn this into a repo object, make sure all its fields are appropriately initialized
             data = {k: self._deep_from_repo_data(v) for k, v in data.items()}
             
@@ -200,6 +204,17 @@ class Repo(ABC):
             return [self._deep_from_repo_data(item) for item in data]
         else:
             return data
+        
+    def _resolve_type_ref(self, type_ref: Any) -> Any:
+        if not isinstance(type_ref, dict):
+            raise ValueError(f"{TYPE_REF_TAG!r} must contain a dictionary")
+        
+        type_name = type_ref.get(TYPE_TAG)
+        
+        if not isinstance(type_name, str):
+            raise ValueError(f"{TYPE_REF_TAG!r}.{TYPE_TAG!r} must be a string")
+        
+        return self.registry.get_class(type_name)
 
     def _find_under_alias(self, type: str, id: str) -> str | None:
         """

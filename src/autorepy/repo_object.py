@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, field
 from typing import Any, Callable, ClassVar, Mapping, Self, TypeAlias
-from autorepy.tags import FORMAT_VERSION_TAG, REF_TAG, TYPE_TAG, ID_TAG
+from autorepy.tags import FORMAT_VERSION_TAG, REF_TAG, TYPE_REF_TAG, TYPE_TAG, ID_TAG
 
 
 RepoData: TypeAlias = dict[str, Any]
 RepoRef: TypeAlias = dict[str, dict[str, str]]
+RepoTypeRef: TypeAlias = dict[str, dict[str, str]]
 Migration: TypeAlias = Callable[[dict[str, Any]], dict[str, Any]]
 
 
@@ -16,6 +17,7 @@ class RepoDataError(ValueError):
     
 ID_FIELD = "id"
 _REF_METADATA_KEY = object()
+_TYPE_REF_METADATA_KEY = object()
 _DEEP_REF_METADATA_KEY = object()
 _OMIT_METEDATA_KEY = object()
 
@@ -34,6 +36,14 @@ def deep_ref(**kwargs):
     metadata = {
         **metadata,
         _DEEP_REF_METADATA_KEY: True,
+    }
+    return field(metadata=metadata, **kwargs)
+
+def type_ref(**kwargs):
+    metadata = kwargs.pop("metadata", {})
+    metadata = {
+        **metadata,
+        _TYPE_REF_METADATA_KEY: True,
     }
     return field(metadata=metadata, **kwargs)
 
@@ -57,6 +67,14 @@ class RepoObject:
     @classmethod
     def type_name(cls) -> str:
         return cls.__name__
+    
+    @classmethod
+    def to_type_ref(cls) -> RepoTypeRef:
+        return {
+            TYPE_REF_TAG: {
+                TYPE_TAG: cls.type_name(),
+            }
+        }
     
     def to_ref(self) -> RepoRef:
         return {
@@ -91,12 +109,24 @@ class RepoObject:
                 value = self._deep_obj_to_ref(value)
             elif field.metadata.get(_REF_METADATA_KEY):
                 value = self._obj_to_ref(value)
+            elif field.metadata.get(_TYPE_REF_METADATA_KEY):
+                value = self._cls_to_type_ref(value)
             else:
                 value = self._deep_serialize(value)
 
             data[field.name] = value
 
         return data
+    
+    @staticmethod
+    def _cls_to_type_ref(cls: type) -> RepoTypeRef | None:
+        if cls is None:
+            return None
+
+        if not issubclass(cls, RepoObject):
+            raise TypeError(f"Called _cls_to_type_ref on value of type {type(cls).__name__}")
+
+        return cls.to_type_ref()
     
     @staticmethod
     def _obj_to_ref(value: Any) -> RepoRef | None:

@@ -2,8 +2,8 @@ from typing import Any, ClassVar
 
 import pytest
 
-from autorepy.repo_object import RepoDataError, RepoObject, ref, omit
-from autorepy.tags import FORMAT_VERSION_TAG, TYPE_TAG, ID_TAG
+from autorepy.repo_object import RepoDataError, RepoObject, ref, omit, type_ref
+from autorepy.tags import FORMAT_VERSION_TAG, TYPE_TAG, ID_TAG, TYPE_REF_TAG
 from dataclasses import dataclass
 
 @dataclass
@@ -197,3 +197,32 @@ def test_to_dict_rejects_invalid_current_version():
 
     with pytest.raises(RepoDataError, match="nonnegative integer"):
         InvalidVersion("x").to_dict()
+        
+        
+        
+@dataclass
+class Foo(RepoObject):
+    pass
+
+
+@dataclass
+class Bar(RepoObject):
+    foo_type: type = type_ref()
+    
+    
+def test_type_ref_rejects_non_repo_object():
+    with pytest.raises(TypeError):
+        Bar(foo_type="x").to_dict()
+        
+        
+def test_type_ref_succeeds_for_repo_object():
+    assert Bar(id="bar", foo_type=Foo).to_dict() == {
+        TYPE_TAG: "Bar",
+        ID_TAG: "bar",
+        FORMAT_VERSION_TAG: 1,
+        "foo_type": {
+            TYPE_REF_TAG: {
+                TYPE_TAG: "Foo",
+            }
+        }
+    }

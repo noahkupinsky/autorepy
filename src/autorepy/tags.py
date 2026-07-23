@@ -1,4 +1,5 @@
 REF_TAG = "$ref"
+TYPE_REF_TAG = "$type_ref"
 TYPE_TAG = "$type"
 ID_TAG = "$id"
 FORMAT_VERSION_TAG = "$format_version"

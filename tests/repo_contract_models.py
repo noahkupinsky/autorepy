@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from autorepy.repo_object import RepoObject, deep_ref, ref
+from autorepy.repo_object import RepoObject, deep_ref, ref, type_ref
 from autorepy.tags import ID_TAG
 
 
@@ -85,6 +85,11 @@ class MigratedCat(RepoObject):
     CURRENT_FORMAT_VERSION: ClassVar[int] = 2
     MIGRATIONS: ClassVar = {1: migrate_cat_1_to_2}
     breed: str
+    
+    
+@dataclass
+class ObjectWithTypeRef(RepoObject):
+    type_ref: type[RepoObject] = type_ref()
 
 
 REPO_OBJECT_TYPES = (
@@ -101,4 +106,5 @@ REPO_OBJECT_TYPES = (
     SlottedObject,
     CustomObject,
     (MigratedCat, "LegacyCat"),
+    ObjectWithTypeRef
 )
